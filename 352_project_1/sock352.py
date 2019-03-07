@@ -29,6 +29,7 @@ SOCK352_HAS_OPT = 10    # Option field is valid
 
 
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
+    # store two udp ports; TX is for sending message
     # setup header format
     sock352PktHdrData = '!BBBBHHLLQQLL'
     udpPkt_hdr_data = struct.Struct(sock352PktHdrData)
@@ -53,6 +54,8 @@ def init(UDPportTx,UDPportRx):   # initialize your UDP socket here
 class socket:
     
     def __init__(self):  # fill in your code here 
+        # create sockets?
+
         # initialize all fields in packet header structure
         self.version = 1
         self.flags = 0
@@ -72,6 +75,7 @@ class socket:
         return
     
     def bind(self,address):
+        # bind to a receiving port Rx
         return 
 
     def connect(self,address):  # fill in your code here 
@@ -110,20 +114,40 @@ class socket:
         return 
     
     def listen(self,backlog):
+        # find size of socket array
         return
 
-    def accept(self):
+    def accept(self): # create connection from server side; 
         (clientsocket, address) = (1,1)  # change this to your code 
+        clientsocket = self
+        # other option
+        # self.socket = [socket ... ]   #socket list
+        # clientsocket = self.socket[0]
         return (clientsocket,address)
     
-    def close(self):   # fill in your code here 
+    def close(self):   # fill in your code here
+        # close if last packet received; else set close variable 
         return 
 
     def send(self,buffer):
+        def recvthread:
+            while acks left:
+                recv acks
+                mark message acked
+        # go back n
+        # send length of file
+        
         bytessent = 0     # fill in your code here 
+        while bytesleft:
+            send bytes
+            check timeout
         return bytesent 
 
     def recv(self,nbytes):
+        # only accept expected packets
+        # send acks
+        # return number of bytes received
+        # reassemble packets
         bytesreceived = 0     # fill in your code here
         return bytesreceived 
 
