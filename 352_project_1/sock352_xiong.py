@@ -3,7 +3,6 @@ import binascii
 import socket as syssock
 import struct
 import sys
-import threading
 
 # these functions are global to the class and
 # define the UDP ports all messages are sent
@@ -22,11 +21,11 @@ sock352PktHdrData       # packet format
 udpPkt_hdr_data     # packet format struct
 udpSocket       # udp socket for communication
 
-SOCK352_SYN = 0x01    # Connection initiation
-SOCK352_FIN = 0x02    # Connection end
-SOCK352_ACK = 0x04    # Acknowledgement
-SOCK352_RESET = 0x08  # Reset the connection
-SOCK352_HAS_OPT = 0xA0    # Option field is valid
+SOCK352_SYN = 1    # Connection initiation
+SOCK352_FIN = 2    # Connection end
+SOCK352_ACK = 4    # Acknowledgement
+SOCK352_RESET = 8  # Reset the connection
+SOCK352_HAS_OPT = 10    # Option field is valid
 
 
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
@@ -40,21 +39,22 @@ def init(UDPportTx,UDPportRx):   # initialize your UDP socket here
         PORTRX = UDPportRx
     else
         PORTRX = UDPportTx
+    # setup udp socket
+    if(!udpSocket)
+        udpSocket = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
+    # bind to receiver port
+    udpSocket.bind(('', PORTRX))
+    # set timeout
+    udpSocket.settimeout(0.2)
+    # debug info
+    print "Successfully initialized!"
     
     pass 
     
 class socket:
     
     def __init__(self):  # fill in your code here 
-        # create udp socket
-        if(!self.udpSocket)
-            self.udpSocket = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
-        # bind to receiver port
-        self.udpSocket.bind(('', PORTRX))
-        # set timeout
-        self.udpSocket.settimeout(0.2)
-        # debug info
-        print "Successfully initialized!"
+        # create sockets?
 
         # initialize all fields in packet header structure
         self.version = 1
@@ -70,7 +70,7 @@ class socket:
         self.window = 0
         self.payload_len = 0
         # pack the initial struct
-        # self.header = self.autopack()
+        self.header = autopack()
 
         return
     
@@ -80,98 +80,55 @@ class socket:
 
     def connect(self,address):  # fill in your code here 
         # Generate sequence number
-        self.sequence_no = random.randint(1, 100)
-        # set syn flag
-        self.flags = SOCK352_SYN
+        do
+            sequence_No = random.randint(1, 100)
+        while
+            sequence_No != self.sequence_no
+        self.sequence_no = sequence_No
+        # change flags
+        self.flags = 1
         # set ack_no
         self.ack_no = -1
         # pack the message
-        header = self.autopack()
-        # send the message to transmitter
-        self.ack_no = -1
-        while (self.ack_no != self.sequence_no+1):        
-            self.udpSocket.sendto(header, PORTTX)
+        header = autopack()
+        # send the message to transmitter (i.e. the other machine's receiver port)
+        recv_SYN = -1
+        recv_ACK = -1
+        while (recv_ACK != self.sequence_no+1)
+            udpSocket.sendto(header, PORTTX)
             print "Try to connect..."
-            try:
-                recv_string, portnum = syssock.recvfrom(4096)
-            except syssock.timeout:
-                print("Fail to establish connection!")
-                continue
+            recv_string, portnum = recvfrom(4096)
+            recv_header = udpPkt_hdr_data.unpack(recv_string)
+            recv_ACK = getACK()
+            # if no connection before
+            if(checkflag(recv_header) == SOCK352_SYN || checkflag(recv_header) == SOCK352_ACK)
+                print "No connection before. Connected!"
+                break
+            # if having existing connection
+            elif (checkflag(recv_header) == SOCK352_RESET)
+                print "Existing connection. Connected!"
+                break
+            else
+                print "Unable to connect!"
 
-            if len(recv_string) is not None:
-                # unpack the message from server
-                recv_header = udpPkt_hdr_data.unpack(recv_string)
-                # if no connection before
-                if(recv_header[1] == SOCK352_SYN)
-                    print "No connection exists before. Connected!"
-                    # record the ack_no and seq_no from server
-                    self.ack_no = recv_header[9]
-                    self.sequence_no = recv_header[8]
-                    # send the returning message to server again
-                    temp = self.sequence_no
-                    self.sequence_no = self.ack_no
-                    self.ack_no = temp + 1
-                    header = self.autopack()
-                    self.udpSocket.sendto(header, PORTTX)
-                    break
-                # if having existing connection
-                elif (recv_header[1] == SOCK352_RESET)
-                    self.sequence_no += 1
-                    print "Connection already exists. Connected!"
-                    break
-                else
-                    print "Fail to establish connection!"
-
-        # call built-in connect()
-        try:
-            syssock.connect(address)
-        except: 
-            print "Connecting failed!"
-            return
-        
         return 
     
     def listen(self,backlog):
         # find size of socket array
         return
 
-    def accept(self):
-        send_string = ""
-        # try to recv the message from client
-        while send_string == "":
-            send_string, portnum = syssock.recvfrom(4096)
-            if len(send_string) != 0:
-                # unpack the message from server
-                send_header = udpPkt_hdr_data.unpack(send_string)
-                if self.flags == 0:  # no connection before
-                    self.flags = SOCK352_SYN
-                elif self.flags == SOCK352_SYN || self.flags == SOCK352_RESET: # have an existing connection
-                    self.flags = SOCK352_RESET
-                self.sequence_no = random.randint(1, 100)
-                self.ack_no = send_header[8] + 1
-        # pack header and send
-        header = self.autopack()   
+    def accept(self): # create connection from server side; 
+        (clientsocket, address) = (1,1)  # change this to your code 
         clientsocket = self
-        clientsocket.udpSocket.sendto(header, PORTTX)
-        return (clientsocket,portnum)
+        # other option
+        # self.socket = [socket ... ]   #socket list
+        # clientsocket = self.socket[0]
+        return (clientsocket,address)
     
     def close(self):   # fill in your code here
         # close if last packet received; else set close variable 
         return 
 
-    # def send(self,buffer):
-    #     def recvthread:
-    #         while acks left:
-    #             recv acks
-    #             mark message acked
-    #     # go back n
-    #     # send length of file
-        
-    #     bytessent = 0     # fill in your code here 
-    #     while bytesleft:
-    #         send bytes
-    #         check timeout
-    #     return bytesent 
     def send(self,buffer):
         fileSeg, ACKList = fileDivder(buffer)
         segmentNo = len(fileSeg)
@@ -189,15 +146,11 @@ class socket:
                     headerdata = syssock.recvfrom(4096)
                     headerdatalist = headerdata.unpack()
                     # if receive ACK 
-                    if (headerdatalist[1] == 4):
+                    if (headerdatalist[1] = 4):
                         ACKList[headerdatalist[8]-self.sequence_no] = 1
                         # current sequence number is acked
                         return endTime = time.clock()
             return 0
-
-        # create one thread to keep checking ACKs
-        t1 = threading.Thread(target=recvthread)
-        t1.start()
 
         # keep sending segments
         while True:
@@ -238,6 +191,8 @@ class socket:
         # bytesleft = buffer.unpack()
 
 
+
+
     def recv(self,nbytes):
         # only accept expected packets
         # send acks
@@ -250,6 +205,7 @@ class socket:
         return udpPkt_hdr_data.pack(self.version, self.flags, self.opt_ptr, self.protocol, self.checksum, 
             self.source_port, self.dest_port, self.sequence_no, self.ack_no, self.window, self.payload_len)
 
+    
     # divide a buffer into several segments 
     # return a list of file segments and a list of ACK list
     def fileDivder(self, buffer):
@@ -271,6 +227,6 @@ class socket:
 
         return fileSeg, ACKList
 
-    
+            
 
 
