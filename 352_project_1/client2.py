@@ -43,6 +43,7 @@ def main():
             filesize = os.path.getsize(filename)
             fd = open(filename, "rb")
             usefile = True
+            print filename, filesize
         except:
             print ( "error opening file: %s" % (filename))
             exit(-1)
