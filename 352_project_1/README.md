@@ -1,87 +1,28 @@
-# Project Title
+# 352_Project_1
 
-One Paragraph of project description goes here
+This is a documentation for Rutgers CS352 Spring 2019 Project 1. The project demonstrates a simple version of Go-Back-N protocol similar to TCP. As implementing in Python, we built it based on UDP transport layer. 
 
-## Getting Started
+## Usage and Arguments
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+Users should run server2.py and client2.py on different terminals (either on different machines or not)
 
-### Prerequisites
-
-What things you need to install the software and how to install them
-
+<strong>Arguments:</strong> </br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-f (the file name to send or to save) </br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-d (the destination host to send to)</br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-u (the UDP port to use for receiving)</br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-v (the UDP port to use for sending) (optional)</br>
+  
+<strong>Example Usage:</strong>
+```bash
+> python server2.py -f recv.txt -u 8888 -v 9999
 ```
-Give examples
-```
-
-### Installing
-
-A step by step series of examples that tell you how to get a development env running
-
-Say what the step will be
-
-```
-Give the example
+```bash
+> python client2.py -d localhost -f send.txt -u 9999 -v 8888
 ```
 
-And repeat
+## Detailed Description
+In order to imitate TCP protocol in each step of socket communication, our functions in project map the existing Python socket built-in methods. For example, connect() and accept() function would first complete a “three way handshake” communication, then the socket connection would be established. In recv(), the server would only accept packets with correct sequence number, and send back ACKs. If any packets lost, the server would block and wait until the client retransmit the packet after timeout. In send(), we use the technique of multi-threading to allow the client sending packets and receiving ACKs simultaneously. When one thread realizes there is a timeout, it will notify the other thread immediately by modifying a shared global variable. And the sending thread will resend from the specific packets. In close() function, we implement “two double handshakes” algorithm which ensures the termination can be done from both sides. Notice the termination would fail if the transmission is still going on.
 
-```
-until finished
-```
-
-End with an example of getting some data out of the system or using it for a little demo
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-### And coding style tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-## Deployment
-
-Add additional notes about how to deploy this on a live system
-
-## Built With
-
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
-
-## Contributing
-
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
-
-## Authors
-
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
+## Dependencies:
+- Python 2.x (https://www.python.org/downloads/release/python-272/) (<strong>using python3 may cause crash</strong>) </br>
+- Currently the project is not using any outside packages, but we may use in the future version to extend the functionality. 
