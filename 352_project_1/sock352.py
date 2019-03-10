@@ -34,9 +34,8 @@ lock1 = threading.Lock()
 lock2 = threading.Lock()    
 
 
+# store two udp ports; TX is for sending message
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
-    # store two udp ports; TX is for sending message
-    # setup port numbers
     global PORTTX, PORTRX
     PORTTX = int(UDPportTx)
     if(UDPportRx):
@@ -49,13 +48,12 @@ def init(UDPportTx,UDPportRx):   # initialize your UDP socket here
 # return a list of file segments
 def fileDivder(buffer):
     buffer_string = buffer
-    # delcare a list of file segments
+    # compute the number of segments
     remainder = len(buffer_string)%63900
     seg_no = int(len(buffer_string)/63900)
-    # print "from fileDivder:"
-    # print seg_no
     if remainder != 0:
         seg_no += 1
+    # take substring and store in the list
     fileSeg = ["" for i in range(seg_no)]
     for x in range(0,seg_no-1):
         fileSeg[x] = buffer_string[x*63900:(x+1)*63900]
@@ -63,6 +61,7 @@ def fileDivder(buffer):
 
     return fileSeg
     
+
 class socket:
     
     def __init__(self):  # fill in your code here 
@@ -102,9 +101,11 @@ class socket:
         # bind to a receiving port Rx
         return 
 
-    def connect(self,address):  # fill in your code here 
+    # three way handshake from clinet side
+    def connect(self,address): 
         global PORTTX, SOCK352_SYN
 
+        # record address and port
         tup = (address[0], PORTTX)
         # Generate sequence number
         self.sequence_no = random.randint(1, 100)
@@ -130,7 +131,6 @@ class socket:
             try:
                 recv_string, portnum = self.udpSocket.recvfrom(4096)
             except syssock.timeout:
-                print("Fail to establish connection!")
                 continue
 
             if len(recv_string) is not None:
@@ -173,6 +173,7 @@ class socket:
     def listen(self,backlog):
         return
 
+    # three way handshake from server side
     def accept(self):
         global SOCK352_SYN, SOCK352_RESET
 
@@ -212,6 +213,7 @@ class socket:
 
         return (self,portnum)
     
+    # close the connection if there is no more transmission
     def close(self): 
         global other_address, SOCK352_FIN, SOCK352_ACK
 
@@ -223,7 +225,7 @@ class socket:
         self.flags = SOCK352_FIN
         self.sequence_no += 1
         header = self.autopack()
-        # send close info and check ACKs from the other side
+        # send close info 
         self.ack_no = -1 
         double_handshake = 0
         try: 
@@ -231,17 +233,19 @@ class socket:
         except:
             self.udpSocket.send(header)
         self.udpSocket.settimeout(0.2)
+        # check ACKs from the other side
         while self.termination:    
             try:
                 recv_string, portnum = self.udpSocket.recvfrom(4096)
             except syssock.timeout:
                 print("No ACKs received in termination step!")
                 continue
-            if (recv_string is not None) and (len(recv_string) >= 40):
+            if (recv_string is not None) and (len(recv_string) >= 40):  # listen for messages from the other side
+                # unpack the message
                 recv_header = self.udpPkt_hdr_data.unpack(recv_string)
-                if recv_header[1] == SOCK352_FIN:
+                if recv_header[1] == SOCK352_FIN:   # receive the close request
                     double_handshake += 1
-                    # create ACK header and send
+                    # create ACK header and send back
                     self.ack_no = recv_header[8]+1
                     self.flags = SOCK352_ACK
                     ACKheader = self.autopack()
@@ -249,9 +253,8 @@ class socket:
                         self.udpSocket.sendto(ACKheader, other_address)
                     except:
                         self.udpSocket.send(ACKheader)
-                elif (recv_header[1] == SOCK352_ACK) and (recv_header[9] == self.sequence_no + 1):
+                elif (recv_header[1] == SOCK352_ACK) and (recv_header[9] == self.sequence_no + 1): # receive the ACK
                     double_handshake += 1
-                    # close
                     print "Close successfully!"
             if double_handshake == 2:
                 break
@@ -264,6 +267,7 @@ class socket:
 
         return 
 
+    # Go-Back-N from client side
     def send(self, buffer):
         global fileSeg, segmentNo, currsegIndex, ACKIndex, time_tracker
         # initialize all variables for sending
@@ -272,22 +276,14 @@ class socket:
         ACKIndex = 0                # current ACK check index
         fileSeg = fileDivder(buffer)   # divde the whole file into several segments
         segmentNo = len(fileSeg)     # numbers of segments 
-        time_tracker = [0 for i in range(segmentNo)]
+        time_tracker = [0 for i in range(segmentNo)]    # list to record starting sending time of each segment
         old_sequence_no = self.sequence_no
-
-        print "segmentNo is: "
-        print segmentNo
         
-        if segmentNo == 0:
+        if segmentNo == 0:  # buffer size is 0
             print "No buffer is passed!"
-            return
+            return 0
 
-        # print "from send function:"
-        # print fileSeg
-        # print segmentNo
-        # print time_tracker
-
-        # keep receiving ACK
+        # inner function to keep receiving ACK
         def recvthread(): 
             global fileSeg, segmentNo, currsegIndex, ACKIndex, time_tracker
             while True:
@@ -393,10 +389,6 @@ class socket:
             bytesreceived = bytesreceived + currBytes
             nbytes = nbytes - currPayload
             expSeqNo = expSeqNo + 1
-            # print "nbytes: "
-            # print nbytes
-            # print "len(currBytes)"
-            # print len(currBytes)
 
         self.termination = True     # set termination flag to be True
         self.sequence_no = expSeqNo - 1     # update sequence no
@@ -404,11 +396,12 @@ class socket:
         print "***************************************\n"
         return bytesreceived 
 
+    # helper function to pack the header
     def autopack(self):
         return self.udpPkt_hdr_data.pack(self.version, self.flags, self.opt_ptr, self.protocol, self.header_len, self.checksum, 
             self.source_port, self.dest_port, self.sequence_no, self.ack_no, self.window, self.payload_len)
 
-    
+    # helper function to assemble header and content data
     def __assemble_chunk(self, seg):
         # update payload_len
         if len(seg) > 63900:   # in the case the payload length plus header is over 64k (for debug use)
