@@ -1,4 +1,5 @@
-
+# Rutgers CS352 Project 1
+# Authors: Zetao Yu, Chuanqi Xiong
 import binascii
 import socket as syssock
 import struct
@@ -7,16 +8,6 @@ import threading
 import random
 import time
 
-# these functions are global to the class and
-# define the UDP ports all messages are sent
-# and received from
-
-# class sock352_pkt_hdr():
-#     def __init__(self, field1, field2, field3):
-#         self.field1 = field1
-#         self.field2 = field2
-#         self.field3 = field3
-
 ## usage:
 # python server2.py -f recv.txt -u 1212 -v 3434
 # python client2.py -d localhost -f send.txt -u 3434 -v 1212
@@ -24,7 +15,7 @@ import time
 
 # Global variables for init
 PORTTX = 0      # transmitter port
-PORTRX = 0     # receiver port
+PORTRX = 0      # receiver port
 other_address = ""      # the address of the other side
 # Global variables for send function
 fileSeg = [""]      # divde the whole file into several segments        
@@ -38,8 +29,9 @@ SOCK352_FIN = 0x02    # Connection end
 SOCK352_ACK = 0x04    # Acknowledgement
 SOCK352_RESET = 0x08  # Reset the connection
 SOCK352_HAS_OPT = 0xA0    # Option field is valid
-
-lock = threading.Lock()
+# locks for multi-threading
+lock1 = threading.Lock()    
+lock2 = threading.Lock()    
 
 
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
@@ -50,29 +42,26 @@ def init(UDPportTx,UDPportRx):   # initialize your UDP socket here
     if(UDPportRx):
         PORTRX = int(UDPportRx)
     else:
-        PORTRX = int(UDPportTx)
-
-    print "UDPportTx is: %d\n" %PORTTX
-    print "UDPportRx is: %d\n" %PORTRX
-    
+        PORTRX = int(UDPportTx) 
     pass 
 
-# divide a buffer into several segments 
-# return a list of file segments and a list of ACK list
+# function to divide a buffer into several segments 
+# return a list of file segments
 def fileDivder(buffer):
     buffer_string = buffer
     # delcare a list of file segments
     remainder = len(buffer_string)%63900
     seg_no = int(len(buffer_string)/63900)
+    # print "from fileDivder:"
+    # print seg_no
     if remainder != 0:
         seg_no += 1
     fileSeg = ["" for i in range(seg_no)]
     for x in range(0,seg_no-1):
         fileSeg[x] = buffer_string[x*63900:(x+1)*63900]
-    fileSeg[seg_no-1] = buffer_string[(seg_no-2)*63900:]
+    fileSeg[seg_no-1] = buffer_string[(seg_no-1)*63900:]
 
     return fileSeg
-
     
 class socket:
     
@@ -106,8 +95,6 @@ class socket:
         self.udpPkt_hdr_data = struct.Struct(self.sock352PktHdrData)
         # initialize termination flag
         self.termination = False
-        # pack the initial struct
-        # self.header = self.autopack()
 
         return
     
@@ -117,6 +104,7 @@ class socket:
 
     def connect(self,address):  # fill in your code here 
         global PORTTX, SOCK352_SYN
+
         tup = (address[0], PORTTX)
         # Generate sequence number
         self.sequence_no = random.randint(1, 100)
@@ -126,7 +114,7 @@ class socket:
         self.ack_no = 0
         # pack the message
         header = self.autopack()
-        # send the message
+        # send the first message
         self.ack_no = -1
         old_sequence_no = self.sequence_no
         while (self.ack_no != old_sequence_no+1):  
@@ -138,6 +126,7 @@ class socket:
                 # print "Fail to connect!"
                 continue
             
+            # listen for ACK from server side
             try:
                 recv_string, portnum = self.udpSocket.recvfrom(4096)
             except syssock.timeout:
@@ -182,11 +171,11 @@ class socket:
         return 
     
     def listen(self,backlog):
-        # find size of socket array
         return
 
     def accept(self):
         global SOCK352_SYN, SOCK352_RESET
+
         send_string = ""
         # try to recv the message from client
         while send_string == "":
@@ -237,7 +226,10 @@ class socket:
         # send close info and check ACKs from the other side
         self.ack_no = -1 
         double_handshake = 0
-        self.udpSocket.sendto(header, other_address)
+        try: 
+            self.udpSocket.sendto(header, other_address)
+        except:
+            self.udpSocket.send(header)
         self.udpSocket.settimeout(0.2)
         while self.termination:    
             try:
@@ -245,7 +237,7 @@ class socket:
             except syssock.timeout:
                 print("No ACKs received in termination step!")
                 continue
-            if recv_string is not None:
+            if (recv_string is not None) and (len(recv_string) >= 40):
                 recv_header = self.udpPkt_hdr_data.unpack(recv_string)
                 if recv_header[1] == SOCK352_FIN:
                     double_handshake += 1
@@ -253,7 +245,10 @@ class socket:
                     self.ack_no = recv_header[8]+1
                     self.flags = SOCK352_ACK
                     ACKheader = self.autopack()
-                    self.udpSocket.sendto(ACKheader, other_address)
+                    try: 
+                        self.udpSocket.sendto(ACKheader, other_address)
+                    except:
+                        self.udpSocket.send(ACKheader)
                 elif (recv_header[1] == SOCK352_ACK) and (recv_header[9] == self.sequence_no + 1):
                     double_handshake += 1
                     # close
@@ -278,13 +273,17 @@ class socket:
         fileSeg = fileDivder(buffer)   # divde the whole file into several segments
         segmentNo = len(fileSeg)     # numbers of segments 
         time_tracker = [0 for i in range(segmentNo)]
+        old_sequence_no = self.sequence_no
+
+        print "segmentNo is: "
+        print segmentNo
         
         if segmentNo == 0:
-            print "No buffer is found in the location directory!"
+            print "No buffer is passed!"
             return
 
-        print "from send function:"
-        print fileSeg
+        # print "from send function:"
+        # print fileSeg
         # print segmentNo
         # print time_tracker
 
@@ -292,28 +291,27 @@ class socket:
         def recvthread(): 
             global fileSeg, segmentNo, currsegIndex, ACKIndex, time_tracker
             while True:
-                with lock:
+                with lock1:
                     if time_tracker[ACKIndex] == 0:     # in the case this packet has not yet been sent out
                         continue
-                    if time.clock() - time_tracker[ACKIndex] < 0.00000001:    # timeout
+                    if (time.time() - time_tracker[ACKIndex]) >= 0.2:    # timeout
                         # notify the another thread to retransmit
-                        currsegIndex = ACKIndex
                         print "Time is out!"
-                        break
-                    self.udpSocket.settimeout(0.2 - (time.clock() - time_tracker[ACKIndex]))       #set timeout value
-                    try:
-                        recv_string, portnum = self.udpSocket.recvfrom(4096)
-                        # unpack the header and update ACKIndex
-                        if recv_string is not None:
-                            ACKIndex += 1
-                            print "Succeed to get No. %d ACK!" %ACKIndex
-                    except syssock.timeout:
-                        # notify the another thread to retransmit
                         currsegIndex = ACKIndex
-                        print "Fail to get No. %d ACK!" %ACKIndex
+                        lock1.release()
                         continue
+                    else:
+                        try:
+                            recv_string, portnum = self.udpSocket.recvfrom(4096)
+                            # unpack the header and update ACKIndex
+                            if recv_string is not None:
+                                print "Succeed to get No. %d ACK!" %ACKIndex
+                                ACKIndex += 1
+                        except:
+                            print "Fail to get No. %d ACK!" %ACKIndex
+                            continue
                 # check whether all ACKs have been received
-                with lock:
+                with lock2:
                     if ACKIndex == segmentNo:
                         self.termination = True     # set the termination flag to be True
                         break
@@ -324,35 +322,32 @@ class socket:
 
         # keep sending segments
         while True:
-            with lock:
+            with lock1:
                 if currsegIndex < segmentNo:    # if packets have not all been sent out
                     # update sequence no
-                    self.sequence_no += (1 + currsegIndex)
+                    self.sequence_no = old_sequence_no + 1 + currsegIndex
                     # assemble the chunk
                     chunk = self.__assemble_chunk(fileSeg[currsegIndex])
                     # call built-in send() to send the packet
                     self.udpSocket.send(chunk)
                     print "SENT!!"
                     # record send time
-                    time_tracker[currsegIndex] = time.clock()
+                    time_tracker[currsegIndex] = time.time()
                     # update segment index
                     currsegIndex += 1
-            # check whether all ACKs have been received by another thread
-            with lock:
+            # check whether all ACKs have been received
+            with lock2:
                 if self.termination:
                     break
 
-        print "Finished one send!"
+        print "Finished a single send!"
         return len(buffer)
 
-
+    # accept packets in order and send back ACKs
+    # return number of bytes received
+    # the maximum packet is 40 + 63900 bytes
     def recv(self,nbytes):
-        # only accept expected packets
-        # send acks
-        # return number of bytes received
-        # reassemble packets
-        # header length 40 bytes
-        # one packet maximum lenth 6400 bytes
+        
         global other_address
 
         self.termination = False     # set termination flag to be False
@@ -365,10 +360,10 @@ class socket:
         expSeqNo = self.sequence_no + 1
 
         while nbytes>0:
-
+            
             # unpack the packet
             try:
-                allData = self.udpSocket.recv(4096)
+                allData = self.udpSocket.recv(63940)
             except syssock.timeout:
                 print "Time out for receiving bytes"
                 continue
@@ -396,16 +391,16 @@ class socket:
             self.udpSocket.sendto(ackHeader, other_address)
 
             bytesreceived = bytesreceived + currBytes
-            nbytes = nbytes - len(currBytes)
-            print "from recv: "
-            print nbytes, len(currBytes)
+            nbytes = nbytes - currPayload
             expSeqNo = expSeqNo + 1
+            # print "nbytes: "
+            # print nbytes
+            # print "len(currBytes)"
+            # print len(currBytes)
 
         self.termination = True     # set termination flag to be True
         self.sequence_no = expSeqNo - 1     # update sequence no
-        print "Done receiving\n"
-        print "***************************************\n"
-        print bytesreceived
+        print "Done a single receiving\n"
         print "***************************************\n"
         return bytesreceived 
 
@@ -422,13 +417,7 @@ class socket:
         else:
             self.payload_len = len(seg)
         header = self.autopack()
-        print "from assemble, payload size is: "
-        print len(seg)
-        print "from assemble, payload is: "
-        print seg
         chunk = header + seg
-        print header
-        print len(chunk)
         return chunk
 
 
