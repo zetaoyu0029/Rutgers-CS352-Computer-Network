@@ -56,7 +56,7 @@ sock352HdrStructStr = '!BBBBHHLLQQLL'
 
 
 ##==================================================================##
-# Below is the code from project 1 solution#
+# Below is the variable initialization from project 1 solution#
 
 #Global variables that store the sending and receiving ports of the socket
 portTx = 0
@@ -185,6 +185,17 @@ class socket:
 
         # set the decryption to be false as default
         self.encrypt = False
+
+        # set option field to be 0x0 as not encrypt
+        self.opt = 0x0
+
+        self.privatekey = ""
+        self.publickey = ""
+
+        # declare the nonce and box object
+        self.nonce = None
+        self.box = None
+
         return 
         
     def bind(self,address):
@@ -197,9 +208,14 @@ class socket:
         # example code to parse an argument list (use option arguments if you want)
         global sock352portTx
         global ENCRYPT
+        global publicKeysHex
+        global privateKeysHex
+        global publicKeys
+        global privateKeys
         if (len(args) >= 1): 
             (host,port) = args[0]
             address = (host,port)
+            self.encrypt = False
         if (len(args) >= 2):
             if (args[1] == ENCRYPT):
                 self.encrypt = True
@@ -265,6 +281,29 @@ class socket:
         self.socket.sendto(ack_packet, self.send_address)
         print ("Client is now connected to the server at %s:%s" % (self.send_address[0], self.send_address[1]))
 
+        # if encryption, find the public key match, create nonce and box object for future usage
+        if self.encrypt:
+            # search private keys to find a match
+            if (address[0], portRx) is in privateKeys: #found
+                self.privatekey = privateKeys.get((address[0], portRx)) # store the private key
+            elif ('*', '*') is in privateKeys:
+                self.privatekey = privateKeys.get(('*', '*')) # get the default private key
+            else:
+                print "There is no privatekey found in connect()\n"
+                return
+            # search public keys to find a match
+            if (address[0], portTx) is in publicKeys: #found
+                self.publickey = publicKeys.get((address[0], portTx)) # store the public key
+            elif ('*', '*') is in privateKeys:
+                self.publickey = publicKeys.get(('*', '*')) # get the default public key
+            else:
+                print "There is no publickey found in connect()\n"
+                return
+            
+            # create box and nonce
+            self.box = Box(self.privatekey, self.publickey)
+            self.nonce = nacl.utils.random(Box.NONCE_SIZE)
+
 
     def listen(self,backlog):
         # listen is not used in this assignments 
@@ -274,9 +313,10 @@ class socket:
     def accept(self,*args):
         # example code to parse an argument list (use option arguments if you want)
         global ENCRYPT
+        self.encrypt = False
         if (len(args) >= 1):
             if (args[0] == ENCRYPT):
-                self.encryption = True
+                self.encrypt = True
         
         # your code goes here 
         # makes sure again that the server is not already connected
@@ -341,6 +381,29 @@ class socket:
 
         print("Server is now connected to the client at %s:%s" % (self.send_address[0], self.send_address[1]))
 
+        # if encryption, find the public key match, create nonce and box object for future usage
+        if self.encrypt:
+            # search private keys to find a match
+            if (addr[0], portRx) is in privateKeys: #found
+                self.privatekey = privateKeys.get((addr[0], portRx)) # store the private key
+            elif ('*', '*') is in privateKeys:
+                self.privatekey = privateKeys.get(('*', '*')) # get the default private key
+            else:
+                print "There is no privatekey found in accept()\n"
+                return
+            # search public keys to find a match
+            if (addr[0], portTx) is in publicKeys: #found
+                self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
+            elif ('*', '*') is in privateKeys:
+                self.publickey = publicKeys.get(('*', '*')) # get the default public key
+            else:
+                print "There is no publickey found in accept()\n"
+                return
+            
+            # create box and nonce
+            self.box = Box(self.privatekey, self.publickey)
+            self.nonce = nacl.utils.random(Box.NONCE_SIZE)
+
         return self, addr
 
     def close(self):
@@ -402,8 +465,11 @@ class socket:
             self.ack_no += 1
 
             # attaches the payload length of buffer to the end of the header to finish constructing the packet
-            self.data_packets.append(new_packet + buffer[MAXIMUM_PAYLOAD_SIZE * i:
-                                                         MAXIMUM_PAYLOAD_SIZE * i + payload_len])
+            chunk = buffer[MAXIMUM_PAYLOAD_SIZE * i:MAXIMUM_PAYLOAD_SIZE * i + payload_len]
+            # if encrytion is needed, encrypt the chunk first
+            if self.encrypt:
+                chunk = self.box.encrypt(chunk, nonce)
+            self.data_packets.append(new_packet + chunk)
         return total_packets
 
     def send(self,buffer):
@@ -414,6 +480,10 @@ class socket:
             self.file_len = struct.unpack("!L", buffer)[0]
             print ("File length sent: " + str(self.file_len) + " bytes")
             return self.file_len
+
+        # set the option field in the header based on encryption
+        if self.encrypt:
+            self.opt = 0x1
 
         # sets the starting sequence number and creates data packets starting from this number
         start_sequence_no = self.sequence_no
@@ -559,7 +629,7 @@ class socket:
             (
                 0x1,  # version
                 flags,  # flags
-                0x0,  # opt_ptr
+                self.opt,  # opt_ptr
                 0x0,  # protocol
                 PACKET_HEADER_LENGTH,  # header_len
                 0x0,  # checksum
@@ -585,6 +655,14 @@ class socket:
         if packet_header[PACKET_SEQUENCE_NO_INDEX] != self.ack_no:
             return
 
+        # check whether the message is encrypted. If so, decrypt it.
+        if packet_header[2] == 0x1 and self.encrypt == True:
+            self.opt = 0x1 # set opt to be 0x1
+            packet_data = self.box.decrypt(packet_data)
+        # if the option field and encrpyt is different, raise an error message
+        elif (packet_header[2] == 0x1 and self.encrypt == False) or (packet_header[2] != 0x1 and self.encrypt == True):
+            raise Exception("Failed to decrypt because of non-accordance.")
+            return
         # adds the payload data to the data packet array
         self.data_packets.append(packet_data)
         # increments the acknowledgement by 1 since it is supposed to be the next expected sequence number
