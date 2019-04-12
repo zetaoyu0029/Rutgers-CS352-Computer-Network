@@ -196,6 +196,7 @@ class socket:
         global ENCRYPT
         if (len(args) >= 1): 
             (host,port) = args[0]
+            address = (host,port)
         if (len(args) >= 2):
             if (args[1] == ENCRYPT):
                 self.encrypt = True
