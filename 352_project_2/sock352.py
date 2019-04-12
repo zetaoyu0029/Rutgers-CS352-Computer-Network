@@ -1,3 +1,6 @@
+# Authors: Zetao Yu, Chuanqi Xiong
+# Part 1 code referred to Anarav Patel and Saurin Shah
+
 
 # CS 352 project part 2 
 # this is the initial socket library for project 2 
