@@ -291,9 +291,10 @@ class socket:
             else:
                 print "There is no privatekey found in connect()\n"
                 return
+                
             # search public keys to find a match
-            if (address[0], portTx) is in publicKeys: #found
-                self.publickey = publicKeys.get((address[0], portTx)) # store the public key
+            if (addr[0], portTx) is in publicKeys: #found
+                self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
             elif ('*', '*') is in privateKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
             else:
