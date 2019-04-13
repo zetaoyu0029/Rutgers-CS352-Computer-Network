@@ -284,18 +284,18 @@ class socket:
         # if encryption, find the public key match, create nonce and box object for future usage
         if self.encrypt:
             # search private keys to find a match
-            if (address[0], portRx) is in privateKeys: #found
+            if (address[0], portRx) in privateKeys: #found
                 self.privatekey = privateKeys.get((address[0], portRx)) # store the private key
-            elif ('*', '*') is in privateKeys:
+            elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
             else:
                 print "There is no privatekey found in connect()\n"
                 return
                 
             # search public keys to find a match
-            if (addr[0], portTx) is in publicKeys: #found
+            if (addr[0], portTx) in publicKeys: #found
                 self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
-            elif ('*', '*') is in privateKeys:
+            elif ('*', '*') in privateKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
             else:
                 print "There is no publickey found in connect()\n"
@@ -385,17 +385,17 @@ class socket:
         # if encryption, find the public key match, create nonce and box object for future usage
         if self.encrypt:
             # search private keys to find a match
-            if (addr[0], portRx) is in privateKeys: #found
+            if (addr[0], portRx) in privateKeys: #found
                 self.privatekey = privateKeys.get((addr[0], portRx)) # store the private key
-            elif ('*', '*') is in privateKeys:
+            elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
             else:
                 print "There is no privatekey found in accept()\n"
                 return
             # search public keys to find a match
-            if (addr[0], portTx) is in publicKeys: #found
+            if (addr[0], portTx) in publicKeys: #found
                 self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
-            elif ('*', '*') is in privateKeys:
+            elif ('*', '*') in privateKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
             else:
                 print "There is no publickey found in accept()\n"
@@ -469,7 +469,7 @@ class socket:
             chunk = buffer[MAXIMUM_PAYLOAD_SIZE * i:MAXIMUM_PAYLOAD_SIZE * i + payload_len]
             # if encrytion is needed, encrypt the chunk first
             if self.encrypt:
-                chunk = self.box.encrypt(chunk, nonce)
+                chunk = self.box.encrypt(chunk, self.nonce)
             self.data_packets.append(new_packet + chunk)
         return total_packets
 
