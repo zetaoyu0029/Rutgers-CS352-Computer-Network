@@ -189,6 +189,7 @@ class socket:
         # set option field to be 0x0 as not encrypt
         self.opt = 0x0
 
+        # declare private key and public key being used
         self.privatekey = ""
         self.publickey = ""
 
@@ -283,7 +284,6 @@ class socket:
 
         # if encryption, find the public key match, create nonce and box object for future usage
         if self.encrypt:
-            print (address[0], str(portRx))
             # search private keys to find a match
             if (address[0], str(portRx)) in privateKeys: #found
                 self.privatekey = privateKeys.get((address[0], str(portRx))) # store the private key
@@ -297,7 +297,7 @@ class socket:
                 otherhost = 'localhost'
             else:
                 otherhost = addr[0]
-            print (otherhost, str(portTx))
+
             # search public keys to find a match
             if (otherhost, str(portTx)) in publicKeys: #found
                 self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
@@ -306,7 +306,7 @@ class socket:
             else:
                 print "There is no publickey found in connect()\n"
                 return
-            
+
             # create box and nonce
             self.box = Box(self.privatekey, self.publickey)
             self.nonce = nacl.utils.random(Box.NONCE_SIZE)
@@ -395,11 +395,11 @@ class socket:
         # if encryption, find the public key match, create nonce and box object for future usage
         if self.encrypt == True:
 
+            # set the localhost ip address into localhost to accord with our keychain file
             if addr[0] == '127.0.0.1':
                 otherhost = 'localhost'
             else:
                 otherhost = addr[0]
-            print (otherhost, str(portRx))
             # search private keys to find a match
             if (otherhost, str(portRx)) in privateKeys: #found
                 self.privatekey = privateKeys.get((otherhost, str(portRx))) # store the private key
@@ -409,9 +409,6 @@ class socket:
                 print "There is no privatekey found in accept()\n"
                 return
 
-            
-            # set the localhost ip address into localhost to accord with our keychain file
-            print (otherhost, str(portTx))
             # search public keys to find a match
             if (otherhost, str(portTx)) in publicKeys: #found
                 self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
@@ -420,7 +417,7 @@ class socket:
             else:
                 print "There is no publickey found in accept()\n"
                 return
-            
+
             # create box and nonce
             self.box = Box(self.privatekey, self.publickey)
             self.nonce = nacl.utils.random(Box.NONCE_SIZE)
@@ -460,9 +457,12 @@ class socket:
     # method responsible for breaking apart the buffer into chunks of maximum payload length
     def create_data_packets(self, buffer):
 
-        # convert the buffer into binary first if the encryption is needed
+        # if encrytion is needed, convert the buffer into binary first, 
+        # and encrypt the whole buffer
         if self.encrypt:
-            buffer = (' '.join(format(ord(x), 'b') for x in buffer))
+            buffer = buffer.encode('ascii')
+            buffer = self.box.encrypt(buffer,self.nonce)
+            print "File length sent (after encryption): " + str(len(buffer))
 
         # calculates the total packets needed to transmit the entire buffer
         total_packets = len(buffer) / MAXIMUM_PAYLOAD_SIZE
@@ -495,12 +495,8 @@ class socket:
 
             # attaches the payload length of buffer to the end of the header to finish constructing the packet
             chunk = buffer[MAXIMUM_PAYLOAD_SIZE * i:MAXIMUM_PAYLOAD_SIZE * i + payload_len]
-            # if encrytion is needed, encrypt the chunk
-            if self.encrypt:
-                chunk = self.box.encrypt(chunk, self.nonce)
-            print "==========================="
-            print len(chunk)
             self.data_packets.append(new_packet + chunk)
+
         return total_packets
 
     def send(self,buffer):
@@ -621,6 +617,8 @@ class socket:
 
         # sets the bytes to receive to be how many bytes it expects
         bytes_to_receive = nbytes
+        # if self.encrypt:
+        #     nbytes
         # also declares a variable to hold all the string of the data that has been received
         data_received = ""
 
@@ -631,13 +629,15 @@ class socket:
             try:
                 # receives the packet of header + maximum data size bytes (although it will be limited
                 # by the sender on the other side)
-                packet_received = self.socket.recv(PACKET_HEADER_LENGTH + bytes_to_receive)
+                packet_received = self.socket.recv(64000)
 
                 # sends the packet to another method to manage it and gets back the data in return
                 str_received = self.manage_recvd_data_packet(packet_received)
 
                 # adjusts the numbers accordingly based on return value of manage data packet
                 if str_received is not None:
+                    print "========================="
+                    print "Chunk received: " + str(len(str_received))
                     # appends the data received to the total buffer of all the data received so far
                     data_received += str_received
                     # decrements bytes to receive by the length of last data received since that many
@@ -646,6 +646,12 @@ class socket:
             # catches timeout, in which case it just tries to another packet
             except syssock.timeout:
                 pass
+
+        # check whether the message is encrypted. If so, decrypt it.
+        if self.opt == 0x1:
+            data_received = self.box.decrypt(data_received)
+            data_received = data_received.decode('ascii')
+        
         # since it's done with receiving all the bytes, it marks the socket as safe to close
         self.can_close = True
 
@@ -686,14 +692,14 @@ class socket:
         if packet_header[PACKET_SEQUENCE_NO_INDEX] != self.ack_no:
             return
 
-        # check whether the message is encrypted. If so, decrypt it.
+        # check the option field to let the server know the file needs decrypt
         if packet_header[2] == 0x1 and self.encrypt == True:
             self.opt = 0x1 # set opt to be 0x1
-            packet_data = self.box.decrypt(packet_data)
         # if the option field and encrpyt is different, raise an error message
         elif (packet_header[2] == 0x1 and self.encrypt == False) or (packet_header[2] != 0x1 and self.encrypt == True):
             raise Exception("Failed to decrypt because of non-accordance.")
             return
+
         # adds the payload data to the data packet array
         self.data_packets.append(packet_data)
         # increments the acknowledgement by 1 since it is supposed to be the next expected sequence number
