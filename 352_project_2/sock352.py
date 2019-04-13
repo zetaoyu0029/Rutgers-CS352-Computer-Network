@@ -283,19 +283,25 @@ class socket:
 
         # if encryption, find the public key match, create nonce and box object for future usage
         if self.encrypt:
+            print (address[0], str(portRx))
             # search private keys to find a match
-            if (address[0], portRx) in privateKeys: #found
-                self.privatekey = privateKeys.get((address[0], portRx)) # store the private key
+            if (address[0], str(portRx)) in privateKeys: #found
+                self.privatekey = privateKeys.get((address[0], str(portRx))) # store the private key
             elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
             else:
                 print "There is no privatekey found in connect()\n"
                 return
-                
+            
+            if addr[0] == '127.0.0.1':
+                otherhost = 'localhost'
+            else:
+                otherhost = addr[0]
+            print (otherhost, str(portTx))
             # search public keys to find a match
-            if (addr[0], portTx) in publicKeys: #found
-                self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
-            elif ('*', '*') in privateKeys:
+            if (otherhost, str(portTx)) in publicKeys: #found
+                self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
+            elif ('*', '*') in publicKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
             else:
                 print "There is no publickey found in connect()\n"
@@ -304,6 +310,10 @@ class socket:
             # create box and nonce
             self.box = Box(self.privatekey, self.publickey)
             self.nonce = nacl.utils.random(Box.NONCE_SIZE)
+            if self.box == None:
+                print "Box is not able to create! in conncet"
+            elif self.nonce == None:
+                print "Nonce is not able to create! in conncet"
 
 
     def listen(self,backlog):
@@ -383,18 +393,28 @@ class socket:
         print("Server is now connected to the client at %s:%s" % (self.send_address[0], self.send_address[1]))
 
         # if encryption, find the public key match, create nonce and box object for future usage
-        if self.encrypt:
+        if self.encrypt == True:
+
+            if addr[0] == '127.0.0.1':
+                otherhost = 'localhost'
+            else:
+                otherhost = addr[0]
+            print (otherhost, str(portRx))
             # search private keys to find a match
-            if (addr[0], portRx) in privateKeys: #found
-                self.privatekey = privateKeys.get((addr[0], portRx)) # store the private key
+            if (otherhost, str(portRx)) in privateKeys: #found
+                self.privatekey = privateKeys.get((otherhost, str(portRx))) # store the private key
             elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
             else:
                 print "There is no privatekey found in accept()\n"
                 return
+
+            
+            # set the localhost ip address into localhost to accord with our keychain file
+            print (otherhost, str(portTx))
             # search public keys to find a match
-            if (addr[0], portTx) in publicKeys: #found
-                self.publickey = publicKeys.get((addr[0], portTx)) # store the public key
+            if (otherhost, str(portTx)) in publicKeys: #found
+                self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
             elif ('*', '*') in privateKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
             else:
@@ -404,6 +424,10 @@ class socket:
             # create box and nonce
             self.box = Box(self.privatekey, self.publickey)
             self.nonce = nacl.utils.random(Box.NONCE_SIZE)
+            if self.box == None:
+                print "Box is not able to create! in accept"
+            elif self.nonce == None:
+                print "Nonce is not able to create! in accept"
 
         return self, addr
 
@@ -436,6 +460,10 @@ class socket:
     # method responsible for breaking apart the buffer into chunks of maximum payload length
     def create_data_packets(self, buffer):
 
+        # convert the buffer into binary first if the encryption is needed
+        if self.encrypt:
+            buffer = (' '.join(format(ord(x), 'b') for x in buffer))
+
         # calculates the total packets needed to transmit the entire buffer
         total_packets = len(buffer) / MAXIMUM_PAYLOAD_SIZE
 
@@ -467,9 +495,11 @@ class socket:
 
             # attaches the payload length of buffer to the end of the header to finish constructing the packet
             chunk = buffer[MAXIMUM_PAYLOAD_SIZE * i:MAXIMUM_PAYLOAD_SIZE * i + payload_len]
-            # if encrytion is needed, encrypt the chunk first
+            # if encrytion is needed, encrypt the chunk
             if self.encrypt:
                 chunk = self.box.encrypt(chunk, self.nonce)
+            print "==========================="
+            print len(chunk)
             self.data_packets.append(new_packet + chunk)
         return total_packets
 
