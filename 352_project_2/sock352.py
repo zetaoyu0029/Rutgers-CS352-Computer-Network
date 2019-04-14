@@ -289,7 +289,8 @@ class socket:
                 self.privatekey = privateKeys.get((address[0], str(portRx))) # store the private key
             elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
-            else:
+            else:   # if there is no match
+                self.encrypt == False   # no encryption by default
                 print "There is no privatekey found in connect()\n"
                 return
             
@@ -303,7 +304,8 @@ class socket:
                 self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
             elif ('*', '*') in publicKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
-            else:
+            else:   # if there is no match
+                self.encrypt == False
                 print "There is no publickey found in connect()\n"
                 return
 
@@ -405,18 +407,20 @@ class socket:
                 self.privatekey = privateKeys.get((otherhost, str(portRx))) # store the private key
             elif ('*', '*') in privateKeys:
                 self.privatekey = privateKeys.get(('*', '*')) # get the default private key
-            else:
+            else:   # if there is no match
+                self.encrypt == False
                 print "There is no privatekey found in accept()\n"
-                return
+                return self, addr
 
             # search public keys to find a match
             if (otherhost, str(portTx)) in publicKeys: #found
                 self.publickey = publicKeys.get((otherhost, str(portTx))) # store the public key
             elif ('*', '*') in privateKeys:
                 self.publickey = publicKeys.get(('*', '*')) # get the default public key
-            else:
+            else:   # if there is no match
+                self.encrypt == False
                 print "There is no publickey found in accept()\n"
-                return
+                return self, addr
 
             # create box and nonce
             self.box = Box(self.privatekey, self.publickey)
@@ -695,7 +699,7 @@ class socket:
         # check the option field to let the server know the file needs decrypt
         if packet_header[2] == 0x1 and self.encrypt == True:
             self.opt = 0x1 # set opt to be 0x1
-        # if the option field and encrpyt is different, raise an error message
+        # if the option field and encrpyt flag is different, raise an error message
         elif (packet_header[2] == 0x1 and self.encrypt == False) or (packet_header[2] != 0x1 and self.encrypt == True):
             raise Exception("Failed to decrypt because of non-accordance.")
             return
